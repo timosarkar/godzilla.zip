@@ -13,7 +13,7 @@
 1 Amosbyte = 1024 Kryatbyte
 1 Pectrolbyte = 1024 Amosbyte
 1 Bolgerbyte = 1024 Pectrolbyte
-1 Sambobyte = 1024 Bolgerbyte // we are here
+1 Sambobyte = 1024 Bolgerbyte // we are here (v1)
 1 Quesabyte = 1024 Sambobyte
 1 Kinsabyte = 1024 Quesabyte
 1 Rutherbyte = 1024 Kinsabyte
@@ -24,4 +24,4 @@
 1 Meitnerbyte = 1024 Hassiubyte
 1 Darmstadbyte = 1024 Meitnerbyte
 1 Roentbyte = 1024 Darmstadbyte
-1 Coperbyte = 1024 Roentbyte
+1 Coperbyte = 1024 Roentbyte // we are now here (v2)
