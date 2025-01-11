@@ -17,11 +17,11 @@
 1 Quesabyte = 1024 Sambobyte
 1 Kinsabyte = 1024 Quesabyte
 1 Rutherbyte = 1024 Kinsabyte
-1 Dubnibyte = 1024 Rutherbyte
+1 Dubnibyte = 1024 Rutherbyte // we are now here (v2)
 1 Seaborgbyte = 1024 Dubnibyte
 1 Bohrbyte = 1024 Seaborgbyte
 1 Hassiubyte = 1024 Bohrbyte
 1 Meitnerbyte = 1024 Hassiubyte
 1 Darmstadbyte = 1024 Meitnerbyte
 1 Roentbyte = 1024 Darmstadbyte
-1 Coperbyte = 1024 Roentbyte // we are now here (v2)
+1 Coperbyte = 1024 Roentbyte
