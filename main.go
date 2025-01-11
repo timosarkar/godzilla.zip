@@ -14,6 +14,7 @@
 		"io/ioutil"
 		"strings"
 		"time"
+		"sync"
 	)
 
 
@@ -64,14 +65,21 @@
 		// Add ten copies of the previous level zip archive
 		bytesRead, err := ioutil.ReadFile(file)
 		if err != nil {}
+
+		var wg sync.WaitGroup // Add a WaitGroup to wait for goroutines to finish
 		for i := 1; i <= 10; i++ {
-			zipName := fmt.Sprintf("%d.zip", i)
-			err = ioutil.WriteFile(zipName, bytesRead, 0755)
-			if err != nil {}
-			err = AddFileToZip(zipWriter, zipName)
-			if err != nil {}
-			os.Remove(zipName)
+			wg.Add(1) // Increment the WaitGroup counter
+			go func(i int) {
+				defer wg.Done() // Decrement the counter when the goroutine completes
+				zipName := fmt.Sprintf("%d.zip", i)
+				err = ioutil.WriteFile(zipName, bytesRead, 0755)
+				if err != nil {}
+				err = AddFileToZip(zipWriter, zipName)
+				if err != nil {}
+				os.Remove(zipName)
+			}(i)
 		}
+		wg.Wait() // Wait for all goroutines to finish
 		os.Remove(file)
 		return nil
 	}
@@ -120,8 +128,8 @@
 		bombInfo, err := os.Stat(outfile)
 		if err != nil {}
 		bombSize := bombInfo.Size()
-		fmt.Println("disk filesize of supernova.zip:", bombSize/1024, "KB")
-		fmt.Println("decompressed filesize:", decompressionSize, "MB")
+		fmt.Println("disk filesize: supernova.zip", bombSize/1024, "KB")
+		fmt.Println("decompressed filesize", decompressionSize, "MB")
 		fmt.Println("time elapsed:", elapsed, "ms")
 	}
 
