@@ -1,8 +1,13 @@
 
 def main():
   # decompressed zip size of supernova with 83 layers with time elapsed: 149 ms
-  init = 11329650878906250000000000000000000000000000000000000000000000000000000000000000 # 6.11 coperbyte
-
+  # init = 11329650878906250000000000000000000000000000000000000000000000000000000000000000 # 6.11 coperbyte
+  #
+  # decompressed zip size of supernova with 109 layers (5 levels) with time elapsed: 10s
+  # init = 1132965087890625000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+  #
+  # decompressed zip size of supernova with 170 layers (2 levels) with time elapsed: 2s
+  init = 11329650878906250000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
   gb = init / 1024
   tb = gb / 1024
   pb = tb / 1024
@@ -28,8 +33,18 @@ def main():
   meitnerbyte = hassiubyte / 1024
   darmstadbyte = meitnerbyte / 1024
   roentbyte = darmstadbyte / 1024
-  coperbyte = roentbyte / 1024 # (v4)
-  print(coperbyte)
+  sophobyte = roentbyte / 1024
+  coperbyte = sophobyte / 1024 # (v4)
+  koentekbyte = coperbyte / 1024
+  glossybyte = koentekbyte / 1024
+  snugbyte = glossybyte / 1024
+  grandbyte = snugbyte / 1024
+  doombyte = grandbyte / 1024
+  godbyte = doombyte / 1024
+  superbyte = godbyte / 1024 # (v5)
+  googolbyte = superbyte / 1024
+  primebyte = googolbyte / 100000000000000000000000000000000000000000000000000000000000 # new unit | which is 1 googolbyte * 10^59
+  print(primebyte)
 
 if __name__ == "__main__":
     main()

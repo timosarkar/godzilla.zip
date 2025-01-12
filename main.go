@@ -80,7 +80,7 @@ func CopyAndCompress(file string, count int) error {
 	}
 
 	var wg sync.WaitGroup
-	for i := 1; i <= 5; i++ {
+	for i := 1; i <= 2; i++ {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
