@@ -1,84 +1,202 @@
 #include <iostream>
 #include <fstream>
-#include <zlib.h>
+#include <cstring>
+#include <vector>
+#include <lz4.h>
+#include <zip.h>
+#include <gmp.h>
+#include <filesystem>
+#include <chrono>
 
-bool createAndCompressFile(const std::string &filename, const std::string &zipFilename, size_t size) {
-    // Step 1: Create a 1MB file with zeros
-    std::ofstream file(filename, std::ios::binary);
-    if (!file) {
-        std::cerr << "Failed to create the file!" << std::endl;
-        return false;
+void computeDecompressedSize(const std::string& zipFileName, mpz_t& totalSize) {
+    int error = 0;
+    zip_t* zip = zip_open(zipFileName.c_str(), 0, &error);
+    if (!zip) {
+        std::cerr << "Error opening ZIP file: " << zip_strerror(zip) << std::endl;
+        return;
     }
 
-    // Write 1MB of zeros to the file
-    for (size_t i = 0; i < size; ++i) {
-        file.put(0);  // Write a single byte with value 0
-    }
-    file.close();
+    zip_uint64_t numEntries = zip_get_num_entries(zip, 0);
+    for (zip_uint64_t i = 0; i < numEntries; ++i) {
+        struct zip_stat st;
+        zip_stat_init(&st);
+        if (zip_stat_index(zip, i, 0, &st) != 0) {
+            std::cerr << "Error getting file stats: " << zip_strerror(zip) << std::endl;
+            continue;
+        }
 
-    std::ifstream input(filename, std::ios::binary);
-    if (!input.is_open()) {
-        std::cerr << "Error opening input file!" << std::endl;
-        return false;
-    }
+        // Add the size of regular files directly to the total size
+        if (st.name[strlen(st.name) - 1] != '/') {
+            mpz_add_ui(totalSize, totalSize, st.size);
+        }
 
-    std::ofstream output(zipFilename, std::ios::binary);
-    if (!output.is_open()) {
-        std::cerr << "Error opening output file!" << std::endl;
-        return false;
-    }
-
-    const int bufferSize = 128 * 1024;  // Buffer size for compression
-    char buffer[bufferSize];
-    char outBuffer[bufferSize];
-    z_stream strm = {0};
-
-    // Initialize the compression stream
-    if (deflateInit(&strm, Z_DEFAULT_COMPRESSION) != Z_OK) {
-        std::cerr << "Error initializing zlib compression stream!" << std::endl;
-        return false;
+        // If the file is another ZIP archive, we don't extract it, but treat it as metadata
+        if (st.name[strlen(st.name) - 1] == 'z' && strstr(st.name, ".zip")) {
+            std::cout << "Found nested ZIP file: " << st.name << std::endl;
+            // Do not decompress, only consider its metadata
+            mpz_add_ui(totalSize, totalSize, st.size); // Add its size as if it was fully expanded
+        }
     }
 
-    // Read input file and compress it
-    int flush;
-    do {
-        input.read(buffer, bufferSize);
-        std::streamsize bytesRead = input.gcount();
-
-        strm.avail_in = static_cast<uInt>(bytesRead);
-        strm.next_in = reinterpret_cast<Bytef*>(buffer);
-
-        do {
-            strm.avail_out = bufferSize;
-            strm.next_out = reinterpret_cast<Bytef*>(outBuffer);
-            flush = (input.eof()) ? Z_FINISH : Z_NO_FLUSH;
-
-            if (deflate(&strm, flush) == Z_STREAM_ERROR) {
-                std::cerr << "Error during compression!" << std::endl;
-                return false;
-            }
-
-            std::streamsize bytesWritten = bufferSize - strm.avail_out;
-            output.write(outBuffer, bytesWritten);
-        } while (strm.avail_out == 0);
-
-    } while (!input.eof());
-
-    deflateEnd(&strm);
-    output.close();
-    input.close();
-    return true;
+    zip_close(zip);
 }
 
-int main() {
-    const std::string filename = "dummy";
-    const std::string zipFilename = "main.zip";
-    const size_t size = 1024 * 1024;  // 1MB in bytes
 
-    if (createAndCompressFile(filename, zipFilename, size)) {
-        std::cout << "1MB file with zeros created and compressed: " << zipFilename << std::endl;
-    } else {
-        std::cerr << "Error during file creation and compression." << std::endl;
+// Function to create a text file
+void createTextFile(const std::string& fileName, const std::string& content) {
+    std::ofstream outFile(fileName);
+    outFile << content;
+    outFile.close();
+}
+
+// Function to compress data using LZ4
+std::vector<char> compressLZ4(const std::string& input) {
+    int maxCompressedSize = LZ4_compressBound(input.size());
+    std::vector<char> compressedData(maxCompressedSize);
+
+    int compressedSize = LZ4_compress_default(
+        input.c_str(),
+        compressedData.data(),
+        input.size(),
+        maxCompressedSize
+    );
+
+    compressedData.resize(compressedSize);
+    return compressedData;
+}
+
+// Function to create a ZIP file and add compressed data
+void createZipFile(const std::string& zipFileName, const std::string& fileName, const std::vector<char>& compressedData) {
+    int error = 0;
+    zip_t* zip = zip_open(zipFileName.c_str(), ZIP_CREATE | ZIP_TRUNCATE, &error);
+    zip_source_t* source = zip_source_buffer(zip, compressedData.data(), compressedData.size(), 0);
+
+    if (zip_file_add(zip, fileName.c_str(), source, ZIP_FL_OVERWRITE) < 0) {
+        std::cerr << "Error adding file to ZIP: " << zip_strerror(zip) << std::endl;
+        zip_source_free(source);
+        zip_close(zip);
+        return;
+    }
+
+    zip_close(zip);
+}
+
+// Function to compress a ZIP file
+void compressZipFile(const std::string& inputZipFileName, const std::string& outputZipFileName) {
+    // Read the previous zip file
+    std::ifstream inFile(inputZipFileName, std::ios::binary);
+    std::vector<char> zipContent((std::istreambuf_iterator<char>(inFile)), std::istreambuf_iterator<char>());
+    inFile.close();
+
+    // Create a new zip file
+    zip_t* zip = zip_open(outputZipFileName.c_str(), ZIP_CREATE | ZIP_TRUNCATE, nullptr);
+    zip_source_t* source1 = zip_source_buffer(zip, zipContent.data(), zipContent.size(), 0);
+    zip_source_t* source2 = zip_source_buffer(zip, zipContent.data(), zipContent.size(), 0);
+
+    // Add two identical copies to the new zip archive
+    zip_file_add(zip, "copy1.zip", source1, ZIP_FL_OVERWRITE);
+    zip_file_add(zip, "copy2.zip", source2, ZIP_FL_OVERWRITE);
+
+    zip_close(zip);
+}
+
+void handleMultipleLevels(int numLevels) {
+    mpz_t decompressionSize;
+    mpz_init(decompressionSize);
+    mpz_set_ui(decompressionSize, 1024); // Initial size for lvl1.zip
+
+    std::string finalDecompressionSize;
+
+    for (int level = 2; level <= numLevels; ++level) {
+        std::string inputZipFileName = "lvl" + std::to_string(level - 1) + ".zip";
+        std::string outputZipFileName = "lvl" + std::to_string(level) + ".zip";
+
+        compressZipFile(inputZipFileName, outputZipFileName);
+
+        // Increase the decompression size by a factor of 10
+        mpz_mul_ui(decompressionSize, decompressionSize, 2);
+
+        // Store the size of the final level
+        if (level == numLevels) {
+            char* size_str = mpz_get_str(nullptr, 10, decompressionSize);
+            finalDecompressionSize = size_str;
+            free(size_str);
+        }
+
+        std::remove(inputZipFileName.c_str());
+    }
+
+    std::string finalZipFileName = "lvl" + std::to_string(numLevels) + ".zip";
+    std::rename(finalZipFileName.c_str(), "final.zip");
+
+    // Output the decompression size for the final level
+    std::cout << "Final decompression size: " << finalDecompressionSize << " bytes" << std::endl;
+
+    mpz_clear(decompressionSize);
+}
+
+
+void printRealSize(const std::string& zipFileName) {
+    int error = 0;
+    zip_t* zip = zip_open(zipFileName.c_str(), 0, &error);
+    if (!zip) {
+        std::cerr << "Error opening ZIP file: " << zip_strerror(zip) << std::endl;
+        return;
+    }
+
+    zip_uint64_t totalSize = 0;
+    zip_uint64_t numEntries = zip_get_num_entries(zip, 0);
+    for (zip_uint64_t i = 0; i < numEntries; ++i) {
+        struct zip_stat st;
+        zip_stat_init(&st);
+        zip_stat(zip, zip_get_name(zip, i, 0), 0, &st);
+        totalSize += st.size; // Add the size of each file
+    }
+
+
+    std::cout << "Real size of " << zipFileName << ": " << totalSize << " bytes" << std::endl;
+
+    zip_close(zip);
+}
+
+
+int main(int argc, char* argv[]) {
+    try {
+        std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+
+        // Step 1: Create a text file
+        const std::string textFileName = "init";
+        const std::string textContent(1024 * 1024, '0');
+        createTextFile(textFileName, textContent);
+
+        // Step 2: Read file content
+        std::ifstream inFile(textFileName, std::ios::binary);
+        std::string fileContent((std::istreambuf_iterator<char>(inFile)), std::istreambuf_iterator<char>());
+        inFile.close();
+
+        // Step 3: Compress the file content using LZ4
+        auto compressedData = compressLZ4(fileContent);
+
+        // Step 4: Create a ZIP file and add the compressed data
+        const std::string zipFileName = "lvl1.zip";
+        createZipFile(zipFileName, textFileName, compressedData);
+        std::remove("init");
+
+        // Step 5: Handle multiple levels of compression
+        int numLevels = std::atoi(argv[1]); // Specify the number of levels
+        handleMultipleLevels(numLevels);
+
+        printRealSize("final.zip");
+
+
+        // Step 7: Calculate and print elapsed time in seconds
+        std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+        double elapsedSeconds = std::chrono::duration_cast<std::chrono::duration<double> >(end - begin).count();
+        std::cout << "Time elapsed: " << elapsedSeconds << " seconds" << std::endl;
+
+    } catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+        return 1;
     }
 
     return 0;
