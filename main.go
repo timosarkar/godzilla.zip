@@ -1,7 +1,8 @@
 package main
 
 // ./<bin> <amount of nested layers>
-// record: (./a 69) 8.470329472543003e+46 brontobyte with 2GB real size 
+// (old) record: (./a 69) 8.470329472543003e+46 brontobyte with 2GB real size 
+// record: (./a 70) 1e+69 GB with 21GB real size 
 import (
         "archive/zip"
         "fmt"
